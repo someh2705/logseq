@@ -1,0 +1,67 @@
+name: Build Logseq for Windows with Cache
+
+on:
+  push:
+    branches:
+      - main
+      - feat/db
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: 리포지토리 체크아웃
+        uses: actions/checkout@v3
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Java 설치
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Clojure 설치
+        run: |
+          choco install clojure -y
+          refreshenv
+
+      - name: Yarn 설치
+        run: npm install -g yarn
+
+      - name: Node.js 의존성 캐시
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Clojure 의존성 캐시
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-clojure-
+
+      - name: 의존성 설치
+        run: yarn install
+
+      - name: Logseq 빌드
+        run: |
+          yarn release
+          cd static
+          yarn install
+          yarn electron:make -- --platform=win32 --arch=x64
+
+      - name: 아티팩트 업로드
+        uses: actions/upload-artifact@v3
+        with:
+          name: logseq-windows-build
+          path: static/out/make/squirrel.windows/x64/
